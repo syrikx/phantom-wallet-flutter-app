@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:phantom_wallet_connector/phantom_wallet_connector.dart';
+import 'package:capsule/capsule.dart';
 
 void main() {
   runApp(const PhantomWalletApp());
@@ -29,6 +31,8 @@ class WalletConnectionPage extends StatefulWidget {
 }
 
 class _WalletConnectionPageState extends State<WalletConnectionPage> {
+  PhantomConnect? _phantomConnect;
+  Capsule? _capsule;
   String? _walletAddress;
   bool _isConnecting = false;
   String? _error;
@@ -36,6 +40,32 @@ class _WalletConnectionPageState extends State<WalletConnectionPage> {
   @override
   void initState() {
     super.initState();
+    _initializeCapsule();
+  }
+
+  void _initializeCapsule() async {
+    try {
+      // Initialize Capsule with required parameters
+      _capsule = Capsule(
+        environment: Environment.sandbox, // or Environment.prod for production
+        apiKey: 'demo-api-key', // In production, use proper API key
+      );
+      
+      // Initialize PhantomConnect
+      _phantomConnect = PhantomConnect(
+        capsule: _capsule!,
+        appUrl: 'https://phantom-wallet-app.example.com',
+        deepLink: 'phantom-wallet-app',
+      );
+      
+      setState(() {
+        // Successfully initialized
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to initialize Capsule SDK: $e';
+      });
+    }
   }
 
   Future<void> _connectWallet() async {
@@ -45,30 +75,39 @@ class _WalletConnectionPageState extends State<WalletConnectionPage> {
     });
 
     try {
-      // Simulate connection to Phantom Wallet
-      // In a real implementation, this would use the phantom_wallet_connector
-      await Future.delayed(const Duration(seconds: 2));
+      if (_phantomConnect == null) {
+        throw Exception('Phantom connector not initialized. Please check your API key.');
+      }
       
-      // For demo purposes, show a fake address
-      final fakeAddress = 'FeN87p4RDqhGmTkabZ17DN4V1dsSafWK2oJ8BRkY8xAH';
+      // Attempt to connect to Phantom Wallet
+      final address = await _phantomConnect!.connect();
       
       setState(() {
-        _walletAddress = fakeAddress;
+        _walletAddress = address;
         _isConnecting = false;
       });
     } catch (e) {
       setState(() {
-        _error = 'Failed to connect: $e';
+        _error = 'Failed to connect to Phantom: $e';
         _isConnecting = false;
       });
     }
   }
 
   void _disconnectWallet() async {
-    setState(() {
-      _walletAddress = null;
-      _error = null;
-    });
+    try {
+      if (_phantomConnect != null) {
+        await _phantomConnect!.disconnect();
+      }
+      setState(() {
+        _walletAddress = null;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to disconnect: $e';
+      });
+    }
   }
   
   Future<void> _launchPhantom() async {
@@ -177,7 +216,28 @@ class _WalletConnectionPageState extends State<WalletConnectionPage> {
                             Text('Connecting...'),
                           ],
                         )
-                      : const Text('Connect to Phantom Wallet (Demo)'),
+                      : Text(_phantomConnect == null ? 'Initializing...' : 'Connect to Phantom Wallet'),
+                ),
+                if (_phantomConnect == null && _error == null)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      'Setting up Capsule SDK...',
+                      style: TextStyle(color: Colors.orange, fontSize: 12),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: _isConnecting ? null : _connectWallet,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                  child: const Text('Test Connection'),
                 ),
                 const SizedBox(height: 16),
                 OutlinedButton(
